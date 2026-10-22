@@ -1234,6 +1234,7 @@ const createState = (
     bindingsById: new Map(),
     bindingWrites: new Map(),
     prototypeRequireMutationObserved: false,
+    prototypeRequireMutationOwners: new Set(),
     prototypeEnumerationMayAffect: false,
     prototypeMutationSites: [],
     implicitPropertyReads: new WeakMap(),
@@ -1656,6 +1657,7 @@ function* indexPrototypeUncertaintySteps(
       sites.add(effectSite);
       state.prototypeMutationSites.push({ owner, node: effectSite });
     }
+    if (owner !== "Function") state.prototypeRequireMutationOwners.add(owner);
     if (owner === "Object") state.prototypeRequireMutationObserved = undefined;
     state.prototypeEnumerationMayAffect = undefined;
   };
