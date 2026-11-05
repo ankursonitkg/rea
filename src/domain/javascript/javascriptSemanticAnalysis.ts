@@ -1234,7 +1234,6 @@ const createState = (
     bindingsById: new Map(),
     bindingWrites: new Map(),
     prototypeRequireMutationObserved: false,
-    prototypeRequireMutationOwners: new Set(),
     prototypeEnumerationMayAffect: false,
     prototypeMutationSites: [],
     implicitPropertyReads: new WeakMap(),
@@ -1319,13 +1318,6 @@ function* collectDefinitionsSteps(
         t.isForOfStatement(node) ||
         t.isArrayExpression(node) ||
         t.isFunction(node)
-      )
-        needsPrototypeFacts = true;
-      if (
-        (t.isMemberExpression(node) || t.isOptionalMemberExpression(node)) &&
-        (t.isLiteral(unwrapJavaScriptExpression(node.object).node) ||
-          t.isObjectExpression(unwrapJavaScriptExpression(node.object).node) ||
-          t.isArrayExpression(unwrapJavaScriptExpression(node.object).node))
       )
         needsPrototypeFacts = true;
       let parentScope = currentSemanticScope(stack);
@@ -1657,7 +1649,6 @@ function* indexPrototypeUncertaintySteps(
       sites.add(effectSite);
       state.prototypeMutationSites.push({ owner, node: effectSite });
     }
-    if (owner !== "Function") state.prototypeRequireMutationOwners.add(owner);
     if (owner === "Object") state.prototypeRequireMutationObserved = undefined;
     state.prototypeEnumerationMayAffect = undefined;
   };
