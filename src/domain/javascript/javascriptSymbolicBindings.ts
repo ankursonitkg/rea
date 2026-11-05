@@ -1167,7 +1167,8 @@ export class JavaScriptSymbolicBindings {
         target.name,
       );
       const loaderFree: LoaderFreeArgument = t.isRestElement(parameter)
-        ? invocation !== undefined &&
+        ? firstSpread < 0 &&
+          invocation !== undefined &&
           invocation.arguments
             .slice(index)
             .every((argument) => argumentLoaderFree(argument) !== false)
