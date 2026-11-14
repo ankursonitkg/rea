@@ -164,6 +164,7 @@ const TOOL_EFFECT_AUDIT = {
   inspect_il2cpp_metadata: evidence,
   inspect_model_artifact: evidence,
   inspect_api_contract: evidence,
+  inspect_perf_data: evidence,
   inspect_ntfs_journal: evidence,
   inspect_playwright_trace: evidence,
   inspect_gpu_code_objects: evidence,
