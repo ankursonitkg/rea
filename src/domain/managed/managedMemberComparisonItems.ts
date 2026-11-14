@@ -81,6 +81,7 @@ const methodDimensions = (
   rightFieldAccessesByCaller: FieldAccessesByCaller,
   leftAssembly: ManagedMemberInspection["assembly"],
   rightAssembly: ManagedMemberInspection["assembly"],
+  sameArtifact: boolean,
 ): {
   readonly dimensions: MethodItem["dimensions"];
   readonly bodyUnknown: boolean;
@@ -137,6 +138,7 @@ const methodDimensions = (
         right,
         leftCallEdgesByCaller.get(left.token) ?? [],
         rightCallEdgesByCaller.get(right.token) ?? [],
+        sameArtifact,
       )
     : { changed: false, unknown: false };
   const sameFieldShape =
@@ -147,6 +149,7 @@ const methodDimensions = (
         right,
         leftFieldAccessesByCaller.get(left.token) ?? [],
         rightFieldAccessesByCaller.get(right.token) ?? [],
+        sameArtifact,
       )
     : { changed: false, unknown: false };
   const sameExceptionShape =
@@ -294,6 +297,7 @@ const compareReferenceTargets = (
   kind: "field" | "method",
   leftTargets: readonly ReferenceTarget[],
   rightTargets: readonly ReferenceTarget[],
+  sameArtifact: boolean,
 ): { readonly changed: boolean; readonly unknown: boolean } => {
   const align = (method: Method, targets: readonly ReferenceTarget[]) => {
     const anchors = method.body.anchors.filter(
@@ -328,10 +332,31 @@ const compareReferenceTargets = (
     index < Math.max(a.aligned.length, b.aligned.length);
     index += 1
   ) {
-    const leftIdentity = a.aligned[index]?.identity;
-    const rightIdentity = b.aligned[index]?.identity;
-    if (leftIdentity == null || rightIdentity == null) unknown = true;
-    else if (leftIdentity !== rightIdentity) changed = true;
+    const leftTarget = a.aligned[index];
+    const rightTarget = b.aligned[index];
+    if (leftTarget == null || rightTarget == null) {
+      unknown = true;
+      continue;
+    }
+    if (leftTarget.identity != null && rightTarget.identity != null) {
+      if (leftTarget.identity !== rightTarget.identity) changed = true;
+      continue;
+    }
+    // A token that names no row — an unresolvable owner such as TypeSpec —
+    // still names one row per side when both sides read the same authenticated
+    // artifact, so the row is equal without a nominal identity. A resolved
+    // identity on the other side means the unresolved side lost information,
+    // which stays unknown.
+    if (
+      sameArtifact &&
+      left.signature.parse_status === "decoded" &&
+      right.signature.parse_status === "decoded" &&
+      leftTarget.identity == null &&
+      rightTarget.identity == null &&
+      leftTarget.token === rightTarget.token
+    )
+      continue;
+    unknown = true;
   }
   return { changed, unknown };
 };
@@ -341,6 +366,7 @@ const compareFieldTargets = (
   right: Method,
   leftAccesses: readonly ManagedMemberInspection["field_accesses"][number][],
   rightAccesses: readonly ManagedMemberInspection["field_accesses"][number][],
+  sameArtifact: boolean,
 ) =>
   compareReferenceTargets(
     left,
@@ -358,6 +384,7 @@ const compareFieldTargets = (
       token: edge.field_token,
       identity: edge.target_identity_sha256,
     })),
+    sameArtifact,
   );
 
 const compareCallTargets = (
@@ -365,6 +392,7 @@ const compareCallTargets = (
   right: Method,
   leftEdges: readonly ManagedMemberInspection["call_edges"][number][],
   rightEdges: readonly ManagedMemberInspection["call_edges"][number][],
+  sameArtifact: boolean,
 ) =>
   compareReferenceTargets(
     left,
@@ -382,6 +410,7 @@ const compareCallTargets = (
       token: edge.target_token,
       identity: edge.target_identity_sha256,
     })),
+    sameArtifact,
   );
 
 const callShape = (anchors: Method["body"]["anchors"]): string =>
@@ -760,6 +789,7 @@ export const buildMethodItems = (
       context.rightFieldAccessesByCaller,
       context.leftAssembly,
       context.rightAssembly,
+      context.sameArtifact,
     );
     if (locals.changed && !observedDimensions.includes("metadata"))
       observedDimensions.push("metadata");
