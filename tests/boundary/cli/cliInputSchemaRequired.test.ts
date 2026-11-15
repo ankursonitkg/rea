@@ -14,6 +14,7 @@ import {
   apktoolInputSchemas,
   MAX_SELECTED_LOCALES,
 } from "../../../src/domain/apktool/apktoolResourceAnalysis.js";
+import { inspectWebNetworkCaptureInputSchema } from "../../../src/domain/webNetworkCapture.js";
 import { presentOmittableDefaults } from "../../../src/cli/omittableDefaults.js";
 import { dataTypeSelectorGuidance } from "../../../src/cli/analysisSelector.js";
 
@@ -729,6 +730,39 @@ describe("Apktool locale selection input schema", () => {
         ...input,
       }).success;
       expect(parser?.safeParse(input).success).toBe(expected);
+      expect(validate(input)).toBe(expected);
+    }
+  });
+});
+
+describe("web capture record selection input schema", () => {
+  it("requires at least one record ordinal when selection is supplied", async () => {
+    const cli = createCli({});
+    const advertised = await advertisedSchema(
+      cli,
+      "inspect-web-network-capture",
+    );
+    const parser = parserSchema(cli, "inspect-web-network-capture", "options");
+    if (parser === undefined)
+      throw new Error("Web capture options parser was not registered");
+    expect(advertised.options?.properties.record).toMatchObject({
+      type: "array",
+      minItems: 1,
+    });
+    const validate = new Ajv2020({ strict: false }).compile(
+      advertised.options ?? {},
+    );
+    for (const [input, ownerValue] of [
+      [{}, undefined],
+      [{ record: [] }, []],
+      [{ record: [0] }, [0]],
+      [{ record: [0, 1] }, [0, 1]],
+    ] as const) {
+      const expected =
+        inspectWebNetworkCaptureInputSchema.shape.record_ordinals.safeParse(
+          ownerValue,
+        ).success;
+      expect(parser.safeParse(input).success).toBe(expected);
       expect(validate(input)).toBe(expected);
     }
   });
