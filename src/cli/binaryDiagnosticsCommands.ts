@@ -3,6 +3,7 @@ import {
   createRecordedCrashService,
   createBinaryLayoutService,
   createElfNotesService,
+  createDwarfUnitsService,
   createNativeInitializersService,
   createElfUnwindRangesService,
   createAppleIpsService,
@@ -58,6 +59,28 @@ export const registerBinaryDiagnosticsCommands = (
       fields: { path: { description: "Local ELF32/ELF64 image" } },
     },
     inspectWithService(createElfNotesService, "rea-elf-notes"),
+  );
+  registerContractCommand(
+    cli,
+    logger,
+    contract("inspect_dwarf_units"),
+    {
+      command: CLI_COMMANDS.inspectDwarfUnits,
+      description: "Inspect DWARF compile units without executing the image",
+      positionals: ["path"],
+      callerPaths: ["path"],
+      fields: {
+        path: {
+          description:
+            "Local ELF, Mach-O, or PE image, or a DWARF file inside a .dSYM bundle",
+        },
+        architecture: {
+          description:
+            "CPU family of the slice to read from a universal Mach-O; required for universal files",
+        },
+      },
+    },
+    inspectWithService(createDwarfUnitsService, "rea-dwarf-units"),
   );
   registerContractCommand(
     cli,

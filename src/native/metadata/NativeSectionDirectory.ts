@@ -87,6 +87,11 @@ export interface NativeSectionDirectory {
   readonly elf_os_abi: number | null;
   readonly flags: number;
   readonly section_names_limitation?: string;
+  /** Raw COFF symbol table declarations, present only for PE. */
+  readonly pe_symbol_table?: {
+    readonly offset: number;
+    readonly count: number;
+  };
   readonly programs: readonly ElfProgramDeclaration[];
   readonly sections: readonly NativeSection[];
 }
@@ -372,6 +377,10 @@ export function* readPeSectionDirectory(
     machine,
     characteristics,
   } = parsedCoff.value;
+  // PointerToSymbolTable and NumberOfSymbols follow the signature, machine,
+  // section count and timestamp; they locate the long-section-name strings.
+  const symbolTableOffset = coff.u32(12);
+  const symbolCount = coff.u32(16);
   const optional = readPeOptionalHeaderStructure(
     yield request(fileSize, BigInt(pe + 24), BigInt(optionalSize)),
   );
@@ -423,6 +432,7 @@ export function* readPeSectionDirectory(
   }
   return {
     format: "pe",
+    pe_symbol_table: { offset: symbolTableOffset, count: symbolCount },
     elf_os_abi: null,
     bits,
     little: true,
