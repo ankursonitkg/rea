@@ -503,7 +503,13 @@ export const browserScenarioSecretSchema = z.strictObject({
     .refine(
       (name) => !name.includes("=") && !name.includes("\0"),
       "Environment variable names cannot contain '=' or NUL",
-    ),
+    )
+    // A `.refine` states a refusal a caller reads only after sending a request.
+    // Both characters break the child process's environment before any action
+    // runs, so the refusal is advertised as an anchored complement class: one
+    // portable `pattern` keyword rather than a `not`/`allOf` pair, so the
+    // compact profile keeps the leaf instead of reducing it to a plain string.
+    .meta({ pattern: "^[^=\\x00]+$" }),
 });
 
 const snapshotKindSchema = z.enum([
