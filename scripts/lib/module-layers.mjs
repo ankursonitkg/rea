@@ -62,6 +62,7 @@ export const UNIT_LAYERS = Object.freeze(
       "il2cpp",
       "inspector",
       "javascript",
+      "java",
       "jeb",
       "kuna",
       "model",

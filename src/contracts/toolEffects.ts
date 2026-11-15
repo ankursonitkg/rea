@@ -171,6 +171,7 @@ const TOOL_EFFECT_AUDIT = {
   inspect_apk_signature: evidence,
   inspect_python_pyc: evidence,
   inspect_erlang_beam: evidence,
+  inspect_maven_gradle_metadata: evidence,
   inspect_sqlite_database: effects({
     mutatesSession: true,
     writesFilesystem: true,
