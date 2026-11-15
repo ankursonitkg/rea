@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { posix } from "node:path";
 
 import { err, ok } from "../result.js";
 import {
@@ -54,6 +55,13 @@ const host = (
     >
   >,
 ) => ({
+  resolvePath: async (path: string) => ({
+    path: posix.normalize(path),
+    ownershipPath: posix.normalize(path),
+    resolvedPath: posix.normalize(path),
+    fileIdentity: posix.normalize(path),
+    requiredAliases: [],
+  }),
   dependencies: async (path: string, expected: ElfLibraryIdentity) => {
     const image = images[path];
     if (typeof image !== "object")
@@ -75,7 +83,7 @@ const host = (
   },
   isFile: async (path: string) => ({
     kind: "file" as const,
-    isFile: path in images,
+    isFile: posix.normalize(path) in images,
   }),
 });
 
@@ -104,7 +112,7 @@ describe("parseLinkerCache", () => {
   });
 });
 
-describe("libraryClosure", () => {
+describe("libraryClosure denied probes", () => {
   it("continues past a denied directory to the one the linker can search", async () => {
     // A folder with denied search is not one the linker loads from, so a later
     // readable directory holding the soname is the object actually in use.
@@ -115,6 +123,7 @@ describe("libraryClosure", () => {
       },
       [],
       {
+        ...host({}),
         dependencies: async (path: string) =>
           path === "/app/bin/app"
             ? ok(elf(["libcore.so"], [], ["/denied", "/native"]))
@@ -136,77 +145,125 @@ describe("libraryClosure", () => {
       10,
     );
     expect(closure).toEqual({
-      libraries: [{ soname: "libcore.so", path: "/native/libcore.so" }],
+      requiredAliases: [],
+      libraries: [
+        {
+          soname: "libcore.so",
+          path: "/native/libcore.so",
+          ownershipPath: "/native/libcore.so",
+          resolvedPath: "/native/libcore.so",
+        },
+      ],
       missing: [],
       unreadable: [],
       truncated: false,
     });
   });
 
-  it("keeps an unprobeable candidate unresolved instead of reporting it missing", async () => {
-    // Nothing else provides the soname, and the denied folder may hold it, so
-    // the walk records why it could not tell rather than claiming absence.
-    const closure = await libraryClosure(
-      {
-        path: "/app/bin/app",
-        dependencies: elf(["libcore.so"], [], ["/denied"]),
-      },
-      [],
-      {
-        dependencies: async (path: string) =>
-          path === "/app/bin/app"
-            ? ok(elf(["libcore.so"], [], ["/denied"]))
-            : err({
-                kind: "unreadable" as const,
-                identity: null,
-                reason: "EACCES",
-              }),
-        isFile: async () => ({
-          kind: "unknown" as const,
-          unreachable: true,
-        }),
-      },
-      10,
-    );
-    expect(closure).toEqual({
-      libraries: [],
-      missing: [],
-      unreadable: [{ path: "/denied/libcore.so", reason: "EACCES" }],
-      truncated: false,
-    });
-  });
-
-  it("keeps a transiently unprobed candidate ahead of the linker cache", async () => {
-    // A search directory that failed transiently may still be the one the
-    // linker loads from, so its candidate keeps search order.
-    const closure = await libraryClosure(
-      {
-        path: "/app/bin/app",
-        dependencies: elf(["libcore.so"], [], ["/volatile"]),
-      },
-      parseLinkerCache(LINKER_CACHE),
-      {
-        dependencies: async (path: string) =>
-          path === "/app/bin/app"
-            ? ok(elf(["libcore.so"], [], ["/volatile"]))
-            : path === "/volatile/libcore.so"
-              ? ok(elf([]))
+  it.each([true, false])(
+    "keeps an unprobeable candidate unresolved with path resolution %s",
+    async (resolvable) => {
+      // Nothing else provides the soname, and the denied folder may hold it, so
+      // the walk records why it could not tell rather than claiming absence.
+      const closure = await libraryClosure(
+        {
+          path: "/app/bin/app",
+          dependencies: elf(["libcore.so"], [], ["/denied"]),
+        },
+        [],
+        {
+          ...host({}),
+          resolvePath: async (path: string) =>
+            path === "/app/bin/app" || resolvable
+              ? host({}).resolvePath(path)
+              : undefined,
+          dependencies: async (path: string) =>
+            path === "/app/bin/app"
+              ? ok(elf(["libcore.so"], [], ["/denied"]))
               : err({
                   kind: "unreadable" as const,
                   identity: null,
-                  reason: "missing",
+                  reason: "EACCES",
                 }),
-        isFile: async (path: string) =>
-          path === "/volatile/libcore.so"
-            ? { kind: "unknown" as const, unreachable: false }
-            : { kind: "file" as const, isFile: true },
-      },
-      10,
-    );
-    expect(closure).toMatchObject({
-      libraries: [{ soname: "libcore.so", path: "/volatile/libcore.so" }],
-    });
-  });
+          isFile: async () => ({
+            kind: "unknown" as const,
+            unreachable: true,
+          }),
+        },
+        10,
+      );
+      expect(closure).toEqual({
+        requiredAliases: [],
+        libraries: [],
+        missing: [],
+        unreadable: [
+          {
+            path: "/denied/libcore.so",
+            reason: resolvable
+              ? "EACCES"
+              : "the library's filesystem path could not be resolved",
+          },
+        ],
+        truncated: false,
+      });
+    },
+  );
+});
+
+describe("libraryClosure", () => {
+  it.each([true, false])(
+    "keeps a transiently unprobed candidate ahead of the cache with path resolution %s",
+    async (resolvable) => {
+      // A search directory that failed transiently may still be the one the
+      // linker loads from, so its candidate keeps search order.
+      const closure = await libraryClosure(
+        {
+          path: "/app/bin/app",
+          dependencies: elf(["libcore.so"], [], ["/volatile"]),
+        },
+        parseLinkerCache(LINKER_CACHE),
+        {
+          ...host({}),
+          resolvePath: async (path: string) =>
+            path === "/app/bin/app" || resolvable
+              ? host({}).resolvePath(path)
+              : undefined,
+          dependencies: async (path: string) =>
+            path === "/app/bin/app"
+              ? ok(elf(["libcore.so"], [], ["/volatile"]))
+              : path === "/volatile/libcore.so"
+                ? ok(elf([]))
+                : err({
+                    kind: "unreadable" as const,
+                    identity: null,
+                    reason: "missing",
+                  }),
+          isFile: async (path: string) =>
+            path === "/volatile/libcore.so"
+              ? { kind: "unknown" as const, unreachable: false }
+              : { kind: "file" as const, isFile: true },
+        },
+        10,
+      );
+      if (resolvable)
+        expect(closure).toMatchObject({
+          libraries: [{ soname: "libcore.so", path: "/volatile/libcore.so" }],
+        });
+      else
+        expect(closure).toEqual({
+          requiredAliases: [],
+          libraries: [],
+          missing: [],
+          unreadable: [
+            {
+              path: "/volatile/libcore.so",
+              reason: "the library's filesystem path could not be resolved",
+            },
+          ],
+          truncated: false,
+        });
+    },
+  );
 
   it("walks DT_NEEDED through RPATH and the cache for the executable's machine", async () => {
     const closure = await libraryClosure(
@@ -224,13 +281,34 @@ describe("libraryClosure", () => {
 
     expect(closure).toEqual({
       libraries: [
-        { soname: "libnss3.so", path: "/lib/aarch64-linux-gnu/libnss3.so" },
-        { soname: "libc.so.6", path: "/lib/aarch64-linux-gnu/libc.so.6" },
-        { soname: "ld-linux-aarch64.so.1", path: "/lib/ld-linux-aarch64.so.1" },
-        { soname: "libnspr4.so", path: "/lib/aarch64-linux-gnu/libnspr4.so" },
+        {
+          soname: "libnss3.so",
+          path: "/lib/aarch64-linux-gnu/libnss3.so",
+          ownershipPath: "/lib/aarch64-linux-gnu/libnss3.so",
+          resolvedPath: "/lib/aarch64-linux-gnu/libnss3.so",
+        },
+        {
+          soname: "libc.so.6",
+          path: "/lib/aarch64-linux-gnu/libc.so.6",
+          ownershipPath: "/lib/aarch64-linux-gnu/libc.so.6",
+          resolvedPath: "/lib/aarch64-linux-gnu/libc.so.6",
+        },
+        {
+          soname: "ld-linux-aarch64.so.1",
+          path: "/lib/ld-linux-aarch64.so.1",
+          ownershipPath: "/lib/ld-linux-aarch64.so.1",
+          resolvedPath: "/lib/ld-linux-aarch64.so.1",
+        },
+        {
+          soname: "libnspr4.so",
+          path: "/lib/aarch64-linux-gnu/libnspr4.so",
+          ownershipPath: "/lib/aarch64-linux-gnu/libnspr4.so",
+          resolvedPath: "/lib/aarch64-linux-gnu/libnspr4.so",
+        },
       ],
       missing: ["libsecret-1.so.0"],
       unreadable: [],
+      requiredAliases: [],
       truncated: false,
     });
   });
@@ -257,6 +335,7 @@ describe("libraryClosure", () => {
           reason: "the file could not be read",
         },
       ],
+      requiredAliases: [],
       truncated: true,
     });
   });
@@ -282,11 +361,22 @@ describe("libraryClosure candidate identity", () => {
       );
       expect(closure).toEqual({
         libraries: [
-          { soname: "libcore.so", path: "/native/libcore.so" },
-          { soname: "libhelper.so", path: "/native/libhelper.so" },
+          {
+            soname: "libcore.so",
+            path: "/native/libcore.so",
+            ownershipPath: "/native/libcore.so",
+            resolvedPath: "/native/libcore.so",
+          },
+          {
+            soname: "libhelper.so",
+            path: "/native/libhelper.so",
+            ownershipPath: "/native/libhelper.so",
+            resolvedPath: "/native/libhelper.so",
+          },
         ],
         missing: [],
         unreadable: [],
+        requiredAliases: [],
         truncated: false,
       });
     },
@@ -312,9 +402,17 @@ describe("libraryClosure candidate identity", () => {
       10,
     );
     expect(closure).toEqual({
-      libraries: [{ soname: "libcore.so", path: "/cached/libcore.so" }],
+      libraries: [
+        {
+          soname: "libcore.so",
+          path: "/cached/libcore.so",
+          ownershipPath: "/cached/libcore.so",
+          resolvedPath: "/cached/libcore.so",
+        },
+      ],
       missing: [],
       unreadable: [],
+      requiredAliases: [],
       truncated: false,
     });
   });
@@ -337,6 +435,7 @@ describe("libraryClosure unresolved candidates", () => {
       unreadable: [
         { path: "/unreadable/libcore.so", reason: "cannot read header" },
       ],
+      requiredAliases: [],
       truncated: false,
     });
   });
@@ -355,6 +454,7 @@ describe("libraryClosure unresolved candidates", () => {
       unreadable: [
         { path, reason: expect.stringContaining("incompatible ELF") },
       ],
+      requiredAliases: [],
       truncated: false,
     });
   });
@@ -377,7 +477,14 @@ describe("libraryClosure unresolved candidates", () => {
       10,
     );
     expect(closure).toMatchObject({
-      libraries: [{ soname: "libcore.so", path: "/valid/libcore.so" }],
+      libraries: [
+        {
+          soname: "libcore.so",
+          path: "/valid/libcore.so",
+          ownershipPath: "/valid/libcore.so",
+          resolvedPath: "/valid/libcore.so",
+        },
+      ],
       missing: [],
     });
   });
@@ -425,6 +532,7 @@ describe("libraryClosure unresolved candidates", () => {
       libraries: [],
       missing: ["libcore.so"],
       unreadable: [],
+      requiredAliases: [],
       truncated: false,
     });
   });
@@ -450,10 +558,16 @@ describe("libraryClosure search paths", () => {
     );
     expect(closure).toEqual({
       libraries: [
-        { soname: "liborigin.so", path: "/opt/$build-$&/lib/liborigin.so" },
+        {
+          soname: "liborigin.so",
+          path: "/opt/$build-$&/lib/liborigin.so",
+          ownershipPath: "/opt/$build-$&/lib/liborigin.so",
+          resolvedPath: "/opt/$build-$&/lib/liborigin.so",
+        },
       ],
       missing: ["libunsupported.so"],
       unreadable: [],
+      requiredAliases: [],
       truncated: false,
     });
   });
@@ -470,7 +584,12 @@ describe("libraryClosure search paths", () => {
     );
 
     expect(closure.libraries).toEqual([
-      { soname: "libtool.so.1", path: "/usr/lib/libtool.so.1" },
+      {
+        soname: "libtool.so.1",
+        path: "/usr/lib/libtool.so.1",
+        ownershipPath: "/usr/lib/libtool.so.1",
+        resolvedPath: "/usr/lib/libtool.so.1",
+      },
     ]);
   });
 
@@ -503,8 +622,18 @@ describe("libraryClosure search paths", () => {
 
     expect(inherited).toMatchObject({
       libraries: [
-        { soname: "libcore.so", path: "/opt/app/lib/libcore.so" },
-        { soname: "libhelper.so", path: "/opt/app/lib/libhelper.so" },
+        {
+          soname: "libcore.so",
+          path: "/opt/app/lib/libcore.so",
+          ownershipPath: "/opt/app/lib/libcore.so",
+          resolvedPath: "/opt/app/lib/libcore.so",
+        },
+        {
+          soname: "libhelper.so",
+          path: "/opt/app/lib/libhelper.so",
+          ownershipPath: "/opt/app/lib/libhelper.so",
+          resolvedPath: "/opt/app/lib/libhelper.so",
+        },
       ],
       missing: [],
     });
