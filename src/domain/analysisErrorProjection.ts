@@ -622,6 +622,7 @@ const BROWSER_ERROR_CODES: Readonly<
   cleanup_failed: "execution_failure",
   cancelled: "cancelled",
   timeout: "provider_timeout",
+  locator_zero_match: "target_unavailable",
 };
 
 const artifactOperationCode = (
