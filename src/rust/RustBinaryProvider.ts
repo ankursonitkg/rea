@@ -285,35 +285,68 @@ const retainCompilerPathsWithinReport = (
     return;
   const limitation =
     "Compiler paths were omitted to preserve dependency facts within the complete-report byte allowance; compiler-path coverage is partial. Increase producer_limits.output_bytes on the next call (CLI --producer-limits JSON); no restart is required. Increasing max_rustc_hashes alone does not raise this allowance.";
-  const baseline = {
-    ...report,
-    rustc_commit: null,
-    limitations: [...report.limitations, limitation],
-  };
-  const empty = {
-    ...commit,
-    hashes: [],
-    coverage: {
-      status: "partial" as const,
-      reason: "report_bytes" as const,
-      effective_limit: maxOutputBytes,
-    },
-  };
-  const available =
-    maxOutputBytes -
-    Buffer.byteLength(JSON.stringify({ ...baseline, rustc_commit: empty }));
-  let retainedBytes = 0;
-  let count = 0;
-  for (const hash of commit.hashes) {
-    const bytes =
-      Buffer.byteLength(JSON.stringify(hash)) + (count === 0 ? 0 : 1);
-    if (bytes > available - retainedBytes) break;
-    retainedBytes += bytes;
-    count++;
+  // The reader's cause describes the list it collected. Shortening that list leaves the cause
+  // bounding nothing, so this allowance states itself instead — and both the cause and the text
+  // carrying it are decided before the report is sized, so what is published is what the sizing
+  // measured.
+  const superseded = rustcLimitation(commit);
+  const shortLimitations = [
+    ...report.limitations.filter((line) => !superseded.includes(line)),
+    limitation,
+  ];
+  const all = commit.hashes.length;
+  // Sized in the shape it is published in: keeping every hash also keeps the reader's own coverage,
+  // which spells two bytes longer than the one this allowance records, so measuring the shortened
+  // shape and then publishing the original would overstate the room by exactly that.
+  const sizeAt = (count: number): number =>
+    Buffer.byteLength(
+      JSON.stringify({
+        ...report,
+        rustc_commit:
+          count === 0
+            ? null
+            : count === all
+              ? commit
+              : {
+                  ...commit,
+                  hashes: commit.hashes.slice(0, count),
+                  coverage: {
+                    status: "partial" as const,
+                    reason: "report_bytes" as const,
+                    effective_limit: maxOutputBytes,
+                  },
+                },
+        limitations: count === all ? report.limitations : shortLimitations,
+      }),
+    );
+  // Keeping every collected hash leaves the reader's own limit bounding the list, so its cause
+  // stays true and stands — when its text fits.
+  if (sizeAt(all) <= maxOutputBytes) return;
+  // Otherwise this allowance binds, so at least one collected hash must go for that to be the
+  // cause. What fits is measured, not predicted: every candidate is the exact shape it publishes.
+  let kept = 0;
+  let low = 0;
+  let high = all - 1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    if (sizeAt(middle) <= maxOutputBytes) {
+      kept = middle;
+      low = middle + 1;
+    } else high = middle - 1;
   }
   report.rustc_commit =
-    count === 0 ? null : { ...empty, hashes: commit.hashes.slice(0, count) };
-  report.limitations = baseline.limitations;
+    kept === 0
+      ? null
+      : {
+          ...commit,
+          hashes: commit.hashes.slice(0, kept),
+          coverage: {
+            status: "partial" as const,
+            reason: "report_bytes" as const,
+            effective_limit: maxOutputBytes,
+          },
+        };
+  report.limitations = shortLimitations;
 };
 
 const failureForPrimary = (
