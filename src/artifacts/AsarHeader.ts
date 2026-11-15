@@ -127,7 +127,7 @@ export type FinalAsarHeaderProbeObservation = Exclude<
  * observed archive size. This establishes byte extents only; JSON validity and
  * the ASAR header schema belong to the decoder at the interpretation boundary.
  */
-const parseAsarHeaderExtents = (
+export const parseAsarHeaderExtents = (
   prefix: Uint8Array,
   archiveBytes?: number,
 ): Result<Omit<AsarHeaderExtents, "archiveBytes">, ArtifactReaderFailure> => {
@@ -433,9 +433,31 @@ export const readAsarHeader = async (
   assertArtifactReadActive(signal);
   if (bytes.length !== extents.jsonBytes)
     throw new ArtifactReaderFailure("format", "Truncated ASAR JSON header");
-  let json: string;
+  return parseAsarHeaderJson(bytes);
+};
+
+/**
+ * Decode and parse an admitted ASAR header's JSON, rejecting duplicate member
+ * names. Every consumer interprets a header through this one function, so none
+ * accepts bytes another would reject or decode differently. A JSON syntax
+ * error throws as usual; UTF-8 and duplicate-member failures are
+ * `ArtifactReaderFailure("format")`.
+ */
+export const parseAsarHeaderJson = (bytes: Uint8Array): unknown => {
+  const json = decodeAsarHeaderText(bytes);
+  const header = JSON.parse(json) as unknown;
+  rejectDuplicateAsarHeaderMembers(json);
+  return header;
+};
+
+/**
+ * Decode admitted ASAR header bytes as strict UTF-8. Every consumer that
+ * interprets an ASAR header shares this one decoder, so none silently replaces
+ * invalid bytes or reinterprets the raw source differently.
+ */
+export const decodeAsarHeaderText = (bytes: Uint8Array): string => {
   try {
-    json = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
       bytes,
     );
   } catch (cause: unknown) {
@@ -445,9 +467,6 @@ export const readAsarHeader = async (
       { cause },
     );
   }
-  const header = JSON.parse(json) as unknown;
-  rejectDuplicateAsarHeaderMembers(json);
-  return header;
 };
 
 /**
