@@ -14,6 +14,7 @@ import type {
   JavaScriptRuntimeTargetLocation,
 } from "../domain/javascript/javascriptRuntimeObservation.js";
 import { cancelledBy } from "../domain/analysisErrorCore.js";
+import { isLosslessNodeDiscoveryPath } from "./nodeDiscoveryPath.js";
 import {
   authorizedElectronFile,
   type ElectronFileScope,
@@ -149,19 +150,15 @@ export const authorizeRuntimeTargetLocation = async (
       files,
     );
 
-  // Node concatenates the pathname, then replaces quotes and backslashes with
-  // underscores. A remaining underscore cannot prove which pathname was used.
-  if (process.platform !== "win32" && !/[_"\\]/u.test(reportedPath)) {
-    if (reportedPath.startsWith("/")) {
-      const decision = await authorizeRuntimeLocation(
-        pathToFileURL(reportedPath).href,
-        signal,
-        operation,
-        asarHeaderAdmission,
-        files,
-      );
-      if (decision.allowed) return decision;
-    }
+  if (isLosslessNodeDiscoveryPath(reportedPath, process.platform)) {
+    const decision = await authorizeRuntimeLocation(
+      pathToFileURL(reportedPath).href,
+      signal,
+      operation,
+      asarHeaderAdmission,
+      files,
+    );
+    if (decision.allowed) return decision;
   }
   return {
     allowed: true,
