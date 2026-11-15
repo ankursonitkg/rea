@@ -842,6 +842,8 @@ const socketOptionReader = (
  * not, so only a truthy context ends the check. An unknown member keeps the
  * acquisition (see `socketOptionReader`).
  *
+ * The same reader then judges `secureProtocol`; see `rejectsSecureProtocolLiteral`.
+ *
  * Only `tls` reads these members, so `net` is not consulted.
  */
 const rejectsTlsProtocolVersionLiteral = (
