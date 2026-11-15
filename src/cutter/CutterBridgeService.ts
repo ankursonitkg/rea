@@ -189,6 +189,7 @@ export class CutterBridgeService {
             identity_status: output.identityStatus,
           },
           rawResult: normalizedOutput,
+          authority: "external-service",
           subjectUnavailableReason:
             "Cutter exposes no verified stable identity for the active unsaved document or tab.",
           limitations: [
