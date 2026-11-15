@@ -230,6 +230,7 @@ export interface ArtifactReader {
     | "unityfs"
     | "wxapkg"
     | "uimage"
+    | "android-boot-image"
     | "pyinstaller"
     | "dotnet-bundle"
     | "bun-standalone"

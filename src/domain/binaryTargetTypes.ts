@@ -313,6 +313,7 @@ export type BinaryTarget =
           | "unityfs"
           | "wxapkg"
           | "uimage"
+          | "android-boot-image"
           | "dmg"
           | "pkg"
           | "intel-hex"
