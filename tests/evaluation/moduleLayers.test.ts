@@ -5,6 +5,7 @@ import {
   UNIT_LAYERS,
   compareLayerBaseline,
   layerGraphFacts,
+  lowerLayerBaseline,
   sourceUnit,
 } from "../../scripts/lib/module-layers.mjs";
 
@@ -48,6 +49,21 @@ describe("top-level module layers", () => {
     });
   });
 
+  it("skips only the exact declared file-to-file exception", () => {
+    expect(
+      layerGraphFacts([
+        edge("src/domain/localPath.ts", "src/platform/HostPlatform.js"),
+      ]).upward,
+    ).toEqual({});
+    expect(
+      layerGraphFacts([
+        edge("src/domain/localPath.ts", "src/platform/HostPlatform.js"),
+        edge("src/domain/other.ts", "src/platform/HostPlatform.js"),
+        edge("src/domain/localPath.ts", "src/platform/Other.js"),
+      ]).upward,
+    ).toEqual({ "domain -> platform": 2 });
+  });
+
   it("refuses an undeclared unit instead of leaving it unconstrained", () => {
     expect(
       layerGraphFacts([edge("src/newProvider/A.ts", "src/domain/B.js")])
@@ -64,7 +80,7 @@ describe("top-level module layers", () => {
     ).toEqual(["isolated"]);
   });
 
-  it("fails on growth and only reports shrinkage", () => {
+  it("separates growth from shrinkage", () => {
     const baseline = {
       upward: { "native -> application": 2, "gdb -> application": 1 },
       cycles: ["application <-> native", "application <-> gdb"],
@@ -86,5 +102,32 @@ describe("top-level module layers", () => {
       "upward import gdb -> application: 0, baseline 1",
       "recorded mutual import no longer present: application <-> gdb",
     ]);
+  });
+
+  it("lowers a baseline to the observed facts without admitting growth", () => {
+    expect(
+      lowerLayerBaseline(
+        {
+          undeclared: [],
+          upward: {
+            "native -> application": 1,
+            "gdb -> application": 3,
+            "rizin -> application": 1,
+          },
+          cycles: ["application <-> native", "application <-> rizin"],
+        },
+        {
+          upward: {
+            "native -> application": 2,
+            "gdb -> application": 2,
+            "kuna -> application": 1,
+          },
+          cycles: ["application <-> native", "application <-> gdb"],
+        },
+      ),
+    ).toEqual({
+      upward: { "native -> application": 1, "gdb -> application": 2 },
+      cycles: ["application <-> native"],
+    });
   });
 });

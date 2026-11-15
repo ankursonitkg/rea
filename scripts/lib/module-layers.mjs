@@ -5,14 +5,16 @@
  * its layer when it is added.
  *
  * The order follows docs/architecture/architecture.mermaid: domain and
- * contracts at the centre, the process/filesystem foundation, provider
- * adapters, shared application workflows, production composition, then the
+ * contracts at the centre, the process/filesystem foundation, the ports
+ * that providers implement and application consumes, provider adapters,
+ * shared application workflows, production composition, then the
  * CLI and MCP entry points.
  */
 export const LAYER_ORDER = Object.freeze([
   "domain",
   "contracts",
   "foundation",
+  "ports",
   "providers",
   "application",
   "composition",
@@ -36,6 +38,7 @@ export const UNIT_LAYERS = Object.freeze(
       "identity.ts",
       "logger.ts",
     ]),
+    ...units("ports", ["ports"]),
     ...units("providers", [
       "adb",
       "android",
@@ -110,6 +113,32 @@ export const UNIT_LAYERS = Object.freeze(
   ]),
 );
 
+/**
+ * Single file-to-file imports that may point up the layer order. Each one is
+ * a deliberate decision, not a baseline debt: it is not counted, and any other
+ * import between the same units still is. Keep the list short and say why.
+ */
+export const LAYER_EXCEPTIONS = Object.freeze([
+  Object.freeze({
+    file: "src/domain/localPath.ts",
+    target: "src/platform/HostPlatform.ts",
+    // `absoluteLocalPathStringSchema` states which paths are absolute on the
+    // host running REA; that is a fact about the host's path rules, and
+    // HostPlatform is its only reader (maintainer decision, W8).
+    reason:
+      "the absolute local path schema follows the running host's path rules",
+  }),
+]);
+
+const sourcePath = (path) => path.replace(/\.js$/u, ".ts");
+/** Whether one resolved import is a declared layer exception. */
+export const isLayerException = (file, target) =>
+  LAYER_EXCEPTIONS.some(
+    (exception) =>
+      exception.file === sourcePath(file) &&
+      exception.target === sourcePath(target),
+  );
+
 const PRODUCTION_SOURCE = /^src\/.+\.(?:ts|js)$/u;
 const NON_PRODUCTION = /\.(?:test|spec|fixture)\.(?:ts|js)$|\.d\.ts$/u;
 
@@ -150,6 +179,7 @@ export const layerGraphFacts = (imports, files = []) => {
     const from = sourceUnit(file);
     const to = sourceUnit(target);
     if (from === undefined || to === undefined || from === to) continue;
+    if (isLayerException(file, target)) continue;
     for (const unit of [from, to])
       if (UNIT_LAYERS[unit] === undefined) undeclared.add(unit);
     const key = `${from} -> ${to}`;
@@ -173,7 +203,8 @@ export const layerGraphFacts = (imports, files = []) => {
 /**
  * Compare facts with the recorded baseline. Growth fails: a new upward pair,
  * more imports on a recorded pair, or a cycle group not recorded. Shrinkage is
- * returned separately so the baseline can be lowered.
+ * returned separately: the caller fails on it too, so the baseline is lowered
+ * in the change that removes the imports and can never grow back silently.
  */
 export const compareLayerBaseline = (facts, baseline) => {
   const failures = [];
@@ -204,3 +235,18 @@ export const compareLayerBaseline = (facts, baseline) => {
       lowerable.push(`recorded mutual import no longer present: ${group}`);
   return { failures, lowerable };
 };
+
+/**
+ * The baseline lowered to the observed facts: each recorded upward pair keeps
+ * the smaller of its recorded and observed counts, and only recorded cycles
+ * that are still present remain. Nothing is added, so growth still fails.
+ */
+export const lowerLayerBaseline = (facts, baseline) => ({
+  upward: Object.fromEntries(
+    Object.entries(baseline.upward).flatMap(([key, allowed]) => {
+      const count = Math.min(allowed, facts.upward[key] ?? 0);
+      return count > 0 ? [[key, count]] : [];
+    }),
+  ),
+  cycles: baseline.cycles.filter((group) => facts.cycles.includes(group)),
+});
