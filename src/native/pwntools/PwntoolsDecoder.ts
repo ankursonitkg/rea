@@ -6,7 +6,7 @@ import { safeParseUtf8Json } from "../../domain/safeJson.js";
 import {
   AnalysisCleanupLease,
   AnalysisCleanupLeaseGroup,
-} from "../../artifacts/AnalysisCleanupLease.js";
+} from "../../resources/AnalysisCleanupLease.js";
 import {
   bindArtifactFileCleanup,
   artifactFileCancellationCause,
@@ -36,7 +36,7 @@ import {
   readStableArtifact,
 } from "../../artifacts/readStableArtifact.js";
 import { ArtifactResourceScope } from "../../artifacts/ArtifactResourceScope.js";
-import { ArtifactReaderFailure } from "../../artifacts/ArtifactReader.js";
+import { ArtifactReaderFailure } from "../../resources/ArtifactReader.js";
 import { AnalysisError } from "../../domain/analysisErrorBase.js";
 import {
   AnalysisCapabilityUnavailableError,

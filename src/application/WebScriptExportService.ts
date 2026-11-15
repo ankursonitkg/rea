@@ -3,11 +3,11 @@ import { createHash } from "node:crypto";
 
 import { z } from "zod";
 
-import { ArtifactReaderFailure } from "../artifacts/ArtifactReader.js";
+import { ArtifactReaderFailure } from "../resources/ArtifactReader.js";
 import {
   AnalysisCleanupLeaseGroup,
   type AnalysisCleanupLease,
-} from "../artifacts/AnalysisCleanupLease.js";
+} from "../resources/AnalysisCleanupLease.js";
 import type { ArtifactResourceScope } from "../artifacts/ArtifactResourceScope.js";
 import { publishWebScripts } from "../browser/assets/PublishWebScripts.js";
 import { selectScriptCapture } from "../browser/assets/ScriptCaptureAdapters.js";

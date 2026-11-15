@@ -10,8 +10,8 @@ import {
 import { ProviderCleanupError } from "../domain/providerCleanupError.js";
 import { analysisErrorWithCleanupDependencies } from "../domain/analysisErrorCleanup.js";
 import { bindArtifactFileCleanup } from "../artifacts/ArtifactFileOperation.js";
-import { ArtifactReaderFailure } from "../artifacts/ArtifactReader.js";
-import { AnalysisCleanupLease } from "../artifacts/AnalysisCleanupLease.js";
+import { ArtifactReaderFailure } from "../resources/ArtifactReader.js";
+import { AnalysisCleanupLease } from "../resources/AnalysisCleanupLease.js";
 import { constants } from "node:fs";
 import { access, realpath, stat } from "node:fs/promises";
 import { posix, win32 } from "node:path";

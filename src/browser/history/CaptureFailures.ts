@@ -5,8 +5,8 @@ import type { ExecutionOptions } from "../../ports/AnalysisProvider.js";
 import {
   AnalysisCleanupLeaseGroup,
   type AnalysisCleanupLease,
-} from "../../artifacts/AnalysisCleanupLease.js";
-import { ArtifactReaderFailure } from "../../artifacts/ArtifactReader.js";
+} from "../../resources/AnalysisCleanupLease.js";
+import { ArtifactReaderFailure } from "../../resources/ArtifactReader.js";
 import {
   stableArtifactInputRecovery,
   readerIntegrityFailure,

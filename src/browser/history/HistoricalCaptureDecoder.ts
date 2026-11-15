@@ -31,7 +31,7 @@ import { join } from "node:path";
 import type { ExecutionOptions } from "../../ports/AnalysisProvider.js";
 import { readStableArtifact } from "../../artifacts/readStableArtifact.js";
 import { completedStableArtifactObservation } from "../../artifacts/StableArtifactObservation.js";
-import type { ArtifactReaderFailure } from "../../artifacts/ArtifactReader.js";
+import type { ArtifactReaderFailure } from "../../resources/ArtifactReader.js";
 import {
   ArtifactResourceScope,
   type ArtifactCleanupAttempt,
@@ -39,7 +39,7 @@ import {
 import {
   AnalysisCleanupLease,
   AnalysisCleanupLeaseGroup,
-} from "../../artifacts/AnalysisCleanupLease.js";
+} from "../../resources/AnalysisCleanupLease.js";
 import type { AnalysisError } from "../../domain/analysisErrorBase.js";
 import {
   AnalysisCapabilityUnavailableError,

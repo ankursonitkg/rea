@@ -87,7 +87,7 @@ import {
   artifactFilePrimaryFacts,
   withArtifactRegularFile,
 } from "../../src/artifacts/ArtifactFileOperation.js";
-import { AnalysisCleanupLease } from "../../src/artifacts/AnalysisCleanupLease.js";
+import { AnalysisCleanupLease } from "../../src/resources/AnalysisCleanupLease.js";
 import { translateArtifactFailure } from "../../src/artifacts/ArtifactOperationFailure.js";
 import { OwnedFileHandle } from "../../src/filesystem/OwnedFileHandle.js";
 import {
@@ -106,7 +106,7 @@ import {
   webSourceLocationArgs,
   webSourceLocationFixture,
 } from "../fixtures/webSourceLocation.js";
-import { ArtifactReaderFailure } from "../../src/artifacts/ArtifactReader.js";
+import { ArtifactReaderFailure } from "../../src/resources/ArtifactReader.js";
 import { GoBinaryProvider } from "../../src/go/GoBinaryProvider.js";
 import { PythonPycProvider } from "../../src/python/PythonPycProvider.js";
 import { inspectPythonPycInputSchema } from "../../src/domain/python/pythonPyc.js";

@@ -46,7 +46,7 @@ import { observeNativeCalls } from "./NativeCallObservation.js";
 import { realpath, symlink } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { PrivateRuntimeRoot } from "../process/PrivateRuntimeRoot.js";
-import { AnalysisCleanupLeaseGroup } from "../artifacts/AnalysisCleanupLease.js";
+import { AnalysisCleanupLeaseGroup } from "../resources/AnalysisCleanupLease.js";
 import { createAnalysisExecutionEvidence } from "../domain/analysisObservation.js";
 
 import { z } from "zod";
@@ -150,7 +150,7 @@ import {
 import { analysisErrorWithCleanupFailure } from "../domain/analysisErrorCleanup.js";
 import { analysisErrorWithCancellation } from "../domain/analysisErrorCancellation.js";
 import { ArtifactResourceScope } from "../artifacts/ArtifactResourceScope.js";
-import { ArtifactReaderFailure } from "../artifacts/ArtifactReader.js";
+import { ArtifactReaderFailure } from "../resources/ArtifactReader.js";
 import { projectAnalysisError } from "../domain/analysisErrorProjection.js";
 import {
   withNativeMachoSource,
