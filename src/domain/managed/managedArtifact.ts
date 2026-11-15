@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { digestSchema } from "../digests.js";
-import { managedFieldConstantSchema } from "./managedFieldConstant.js";
+import { managedConstantSchema } from "./managedConstant.js";
 
 /** Build-local ECMA-335 metadata token emitted as an eight-digit lowercase hex value. */
 export const managedMetadataTokenSchema = z.string().regex(/^0x[0-9a-f]{8}$/u);
@@ -166,7 +166,7 @@ const managedFieldSchema = z.object({
   name: z.string(),
   flags: z.int().min(0).max(0xffff),
   signature: managedSignatureSchema,
-  constant: managedFieldConstantSchema
+  constant: managedConstantSchema
     .nullable()
     .describe(
       "Field-owned ECMA-335 Constant declaration and decoded default. Null means neither a declaration nor HasDefault was observed.",
@@ -257,6 +257,20 @@ const managedMethodBodySchema = z.object({
   issue: z.string().nullable(),
 });
 
+/** A Param row that declares HasDefault or owns a Constant row. */
+const managedParameterDefaultSchema = z.object({
+  token: managedMetadataTokenSchema,
+  row_offset: offsetSchema,
+  sequence: z
+    .int()
+    .min(0)
+    .max(0xffff)
+    .describe("Param Sequence: 0 is the return value, 1 the first parameter"),
+  name: z.string(),
+  flags: z.int().min(0).max(0xffff),
+  constant: managedConstantSchema,
+});
+
 const managedMethodSchema = z.object({
   token: managedMetadataTokenSchema,
   row_offset: offsetSchema,
@@ -268,6 +282,12 @@ const managedMethodSchema = z.object({
   flags: z.int().min(0).max(0xffff),
   signature: managedSignatureSchema,
   body: managedMethodBodySchema,
+  parameter_defaults: z
+    .array(managedParameterDefaultSchema)
+    .nullable()
+    .describe(
+      "Param-owned ECMA-335 Constant declarations in ParamList order; parameters without HasDefault or a Constant row are omitted. Empty means the method's Param rows were examined; a Param row that cannot be read is omitted and reported as a parse issue. Null means its ParamList run could not be attributed, or a default sits on a Param row no method owns (unlisted by ParamPtr or before every run).",
+    ),
 });
 
 // Declaring types are namespace-qualified like TypeDef `full_name`, nested
