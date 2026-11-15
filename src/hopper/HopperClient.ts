@@ -36,13 +36,13 @@ import {
   HopperRemoteError,
   HopperStartError,
   HopperTimeoutError,
-} from "../domain/hopperErrors.js";
+} from "./HopperErrors.js";
 import type { AnalysisError } from "../domain/analysisErrorBase.js";
 import { readRuntimeSetting } from "../config/runtimeAnalysisSettings.js";
 import {
   hopperStartupFailure,
   type HopperStartupFailureDiagnostic,
-} from "../domain/hopperStartupFailure.js";
+} from "./HopperStartupFailure.js";
 import {
   providerRetryAction,
   sharedProviderFailureStage,
@@ -102,6 +102,7 @@ import {
 import {
   HopperRequestQueue,
   type HopperRequestActivity,
+  type HopperRequestFailure,
 } from "./HopperRequestQueue.js";
 import {
   type HopperBridgeEvent,
@@ -1432,7 +1433,7 @@ export class HopperClient<
     this.#socket?.destroy();
   }
 
-  #failAll(error: HopperError): void {
+  #failAll(error: HopperRequestFailure): void {
     this.#requests.failAll(error);
   }
 
@@ -1449,7 +1450,7 @@ export class HopperClient<
   }
 
   #retainRequestHealth(
-    result: Result<JsonValue, HopperError>,
+    result: Result<JsonValue, AnalysisError>,
     requestId: number,
     operation: string,
   ): void {

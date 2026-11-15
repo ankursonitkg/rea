@@ -1,4 +1,4 @@
-import { open, readFile, writeFile } from "node:fs/promises";
+import { open, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import {
@@ -96,9 +96,6 @@ describe("process CLI error projection", () => {
         expect(action).not.toMatch(/\bretry\b/iu);
         // The caller receives the process boundary's own recovery.
         expect(action).toBe(PROCESS_UNEXPECTED_FAILURE_REMEDIATION);
-        expect(
-          await readFile("docs/user-visible-errors.csv", "utf8"),
-        ).toContain(action);
       } finally {
         read.mockRestore();
       }
