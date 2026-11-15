@@ -16,6 +16,7 @@ import {
   createPeImportsService,
   createWindowsShortcutService,
   createNativeExportsService,
+  createElfDependenciesService,
 } from "../composition/binaryDiagnostics.js";
 import { CLI_COMMANDS } from "../cliCommandNames.js";
 import type { Logger } from "pino";
@@ -310,6 +311,23 @@ export const registerBinaryDiagnosticsCommands = (
       fields: { path: { description: "Local PE or ELF image" } },
     },
     deliverWithService(createNativeExportsService, "rea-native-exports"),
+  );
+  registerContractCommand(
+    cli,
+    logger,
+    contract("inspect_elf_dependencies"),
+    {
+      command: CLI_COMMANDS.inspectElfDependencies,
+      description:
+        "Inspect ELF needed libraries and required symbol versions without executing the image",
+      positionals: ["path"],
+      callerPaths: ["path"],
+      evidenceDelivery: true,
+      fields: {
+        path: { description: "Local ELF32/ELF64 ET_EXEC or ET_DYN image" },
+      },
+    },
+    deliverWithService(createElfDependenciesService, "rea-elf-dependencies"),
   );
   const layout = createBinaryLayoutService(environment);
   registerContractCommand(
