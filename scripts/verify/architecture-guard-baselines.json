@@ -394,9 +394,7 @@
     "scripts/verify-pe-load-config.mjs": 1,
     "scripts/verify-real-cutter.mjs": 1,
     "scripts/verify-test-discovery.mjs": 1,
-    "scripts/verify-test-temp-hygiene.mjs": 1,
-    "scripts/verify-wasm-interface-comparison.mjs": 1,
-    "scripts/verify-windows-native.mjs": 1
+    "scripts/verify-wasm-interface-comparison.mjs": 1
   },
   "macho-load-command-literal": {},
   "lifecycle-plain-throw": {
