@@ -247,11 +247,25 @@ const driveType = (
   name: DRIVE_TYPES[raw] ?? null,
 });
 
-const extensionOf = (path: string | null | undefined): string | null => {
+const extensionOf = (
+  path: string | null | undefined,
+  source: RecordedPathSource,
+): string | null => {
   if (path === undefined || path === null || path.length === 0) return null;
   const normalized = path.replaceAll("/", "\\");
   const slash = normalized.lastIndexOf("\\");
-  const name = slash === -1 ? normalized : normalized.slice(slash + 1);
+  const stored = slash === -1 ? normalized : normalized.slice(slash + 1);
+  // Only a path Win32 will open as a filesystem path gets the trim, and the stored spelling
+  // says which those are: a drive or a UNC share is written with backslashes, while a URL keeps
+  // forward slashes. `//example.test/app.exe.` and `https://example.test/app.exe.` address a
+  // different resource at that period; an unexpanded prefix may expand to a `\\?\` path that
+  // skips the pass entirely.
+  const name =
+    (source !== "filesystem" && !WRITTEN_FILESYSTEM_PATH.test(path)) ||
+    DEVICE_PATH.test(normalized) ||
+    mayExpandToDevicePath(normalized)
+      ? stored
+      : fileNameSegment(stored);
   const dot = name.lastIndexOf(".");
   if (dot <= 0 || dot === name.length - 1) return null;
   return name.slice(dot).toLowerCase();
@@ -264,13 +278,56 @@ const foldPath = (path: string): string =>
 const DEVICE_PATH = /^\\\\[?.]\\/u;
 
 /**
+ * A path as the producer wrote it when Win32 opens it as a filesystem path.
+ *
+ * Two things are evidence. A drive path is written with a letter and a colon, whether the
+ * separators after it are `\` or `/`, because Windows accepts both. A share is written with a
+ * leading `\\`. A URL keeps `/`, and its scheme-relative `//host/…` form folds to the same
+ * separators a share does — so a leading `//` is not a filesystem path, and the period a URL ends
+ * with addresses a different resource rather than naming a trimmed one.
+ */
+const WRITTEN_FILESYSTEM_PATH = /^(?:[a-z]:[\\\\/]|\\\\)/iu;
+
+/**
+ * A segment as Win32 normalization leaves it when it names a directory.
+ *
+ * "Trim characters" in Microsoft's path-format documentation: a segment ending in a single period
+ * loses that period, while a segment of two or more periods is not normalized and is a legal name
+ * of its own. A trailing space survives inside a path; only the end of the path loses it.
+ */
+const directorySegment = (part: string): string =>
+  /(?:^|[^.])\.$/u.test(part) ? part.slice(0, -1) : part;
+
+/** A last segment as Win32 normalization leaves it: every trailing period and space goes. */
+const fileNameSegment = (part: string): string => part.replace(/[. ]+$/u, "");
+
+/**
+ * Whether a stored path may expand into a `\\?\` path.
+ *
+ * An `EnvironmentVariableDataBlock` can supply the whole prefix, and a caller whose variable
+ * expands to `\\?\` keeps the trailing periods Win32 would otherwise trim. The text alone cannot
+ * say which way it goes, so a path that starts with an unexpanded reference keeps its segments as
+ * written rather than guessing a normalization that may not apply.
+ */
+const mayExpandToDevicePath = (path: string): boolean =>
+  /^%[^%\\/]+%/u.test(path);
+
+/**
  * Compare form of a full path, from the text alone: no path is ever opened.
  * Folds case and separators, drops repeated separators and `.` segments, and
  * lets `..` remove one segment but never the drive or UNC `\\server\share` root.
+ * Win32 also trims the periods and spaces it trims before it opens a path, so
+ * `C:\Tools\app.exe.` and `C:\Tools\app.exe ` name the file it names.
  */
-const normalizePath = (path: string): string => {
+const normalizePath = (path: string, source: RecordedPathSource): string => {
+  // The stored spelling is the only evidence that a leading `//` is a scheme-relative URL and
+  // not a UNC share, so it is read before folding replaces those separators.
+  // A filesystem field is a path by construction, so Windows opens it however its separators
+  // are spelled. Only `relative` may hold a URL, where a leading `//` is scheme-relative.
+  const trims = source === "filesystem" || WRITTEN_FILESYSTEM_PATH.test(path);
   const folded = foldPath(path);
-  if (DEVICE_PATH.test(folded)) return folded;
+  if (!trims || DEVICE_PATH.test(folded) || mayExpandToDevicePath(folded))
+    return folded;
   const unc = folded.startsWith("\\\\");
   if (!unc && !/^[a-z]:\\/u.test(folded)) return folded;
   // Empty parts drop out first, so `\\server\\share` keeps its share in the root.
@@ -279,12 +336,23 @@ const normalizePath = (path: string): string => {
     .split("\\")
     .filter((part) => part !== "");
   const root = parts.slice(0, unc ? 2 : 1);
+  const body = parts.slice(root.length);
+  // A path ending in a separator names a directory, whose trailing space Win32 keeps.
+  const openEnded = !folded.endsWith("\\");
   const segments: string[] = [];
-  for (const part of parts.slice(root.length)) {
-    if (part === ".") continue;
-    if (part === "..") segments.pop();
-    else segments.push(part);
-  }
+  body.forEach((part, index) => {
+    if (part === ".") return;
+    if (part === "..") {
+      segments.pop();
+      return;
+    }
+    const name =
+      openEnded && index === body.length - 1
+        ? fileNameSegment(part)
+        : directorySegment(part);
+    // A name Win32 trims away names the directory that holds it.
+    if (name.length > 0) segments.push(name);
+  });
   return unc
     ? `\\\\${[...root, ...segments].join("\\")}`
     : `${root[0] ?? ""}\\${segments.join("\\")}`;
@@ -304,20 +372,34 @@ const hasUnexpandedVariable = (path: string): boolean =>
  * non-ASCII ANSI byte is a character from the unobserved system code page,
  * which its Latin1 projection does not name.
  */
+/**
+ * Where a recorded path came from.
+ *
+ * `filesystem` fields are filesystem paths by construction: Windows opens them and applies its
+ * normalization whatever their separators are, including the forward-slash share spelling
+ * `//server/share`, which `Test-Path` opens. `relative` is the only field that may hold a URL.
+ */
+type RecordedPathSource = "filesystem" | "relative";
+
 type RecordedPath = {
   readonly path: string;
   /** Holds non-ASCII text projected from ANSI bytes. */
   readonly ansi: boolean;
   /** Holds non-ASCII UTF-16 text. */
   readonly unicode: boolean;
+  readonly source: RecordedPathSource;
 };
 
 const isAscii = (text: string): boolean =>
   [...text].every((char) => char <= "\u007f");
 
-const recorded = (path: string, ansi: boolean): RecordedPath => {
+const recorded = (
+  path: string,
+  ansi: boolean,
+  source: RecordedPathSource,
+): RecordedPath => {
   const nonAscii = !isAscii(path);
-  return { path, ansi: ansi && nonAscii, unicode: !ansi && nonAscii };
+  return { path, ansi: ansi && nonAscii, unicode: !ansi && nonAscii, source };
 };
 
 /** Two paths compare as text only when their non-ASCII parts share one encoding. */
@@ -331,14 +413,18 @@ const iconDiffersFromTarget = (
   if (icon === null) return null;
   const text = icon.value;
   if (!isFullPath(text) || hasUnexpandedVariable(text)) return null;
-  const iconPath = recorded(text, icon.encoding === "ansi");
-  const location = normalizePath(text);
+  const iconPath = recorded(text, icon.encoding === "ansi", "filesystem");
+  const location = normalizePath(text, iconPath.source);
   const fullTargets = targets.filter((target) => isFullPath(target.path));
   const fixedTargets = fullTargets.filter(
     (target) =>
       !hasUnexpandedVariable(target.path) && comparableText(target, iconPath),
   );
-  if (fixedTargets.some((target) => normalizePath(target.path) === location))
+  if (
+    fixedTargets.some(
+      (target) => normalizePath(target.path, target.source) === location,
+    )
+  )
     return false;
   // A variable-bearing target, or one whose ANSI bytes the icon text cannot be
   // compared with, could name the icon's file, so no difference is claimed.
@@ -354,7 +440,11 @@ const linkInfoTargets = (
   const suffix =
     suffixText === null || suffixText.length === 0
       ? null
-      : recorded(suffixText, info.common_path_suffix_unicode === null);
+      : recorded(
+          suffixText,
+          info.common_path_suffix_unicode === null,
+          "filesystem",
+        );
   // Each part keeps its own encoding, so an ASCII ANSI part never hides a
   // comparable Unicode part.
   const withSuffix = (base: RecordedPath): RecordedPath =>
@@ -364,18 +454,25 @@ const linkInfoTargets = (
           path: `${base.path.replace(/\\$/u, "")}\\${suffix.path.replace(/^\\/u, "")}`,
           ansi: base.ansi || suffix.ansi,
           unicode: base.unicode || suffix.unicode,
+          source: base.source,
         };
   const values: RecordedPath[] = [];
   const local = info.local_base_path_unicode ?? info.local_base_path;
   if (local !== null && (suffix !== null || local.length > 0))
     values.push(
-      withSuffix(recorded(local, info.local_base_path_unicode === null)),
+      withSuffix(
+        recorded(local, info.local_base_path_unicode === null, "filesystem"),
+      ),
     );
   const net = info.common_network_relative_link;
   if (net !== null) {
     const share = net.net_name_unicode ?? net.net_name;
     if (share !== null)
-      values.push(withSuffix(recorded(share, net.net_name_unicode === null)));
+      values.push(
+        withSuffix(
+          recorded(share, net.net_name_unicode === null, "filesystem"),
+        ),
+      );
   }
   return values;
 };
@@ -390,7 +487,9 @@ const targetPaths = (report: {
     report.link_info === null ? [] : linkInfoTargets(report.link_info);
   const relative = report.string_data.relative_path;
   if (relative !== null)
-    values.push(recorded(relative.value, relative.encoding === "ansi"));
+    values.push(
+      recorded(relative.value, relative.encoding === "ansi", "relative"),
+    );
   if (report.id_list !== null) {
     const lastFile = [...report.id_list.items]
       .reverse()
@@ -398,7 +497,11 @@ const targetPaths = (report: {
     // Type bit 0x04 marks a UTF-16LE name; otherwise the name is ANSI.
     if (lastFile?.kind === "file_entry")
       values.push(
-        recorded(lastFile.short_name, (lastFile.type_byte & 0x04) === 0),
+        recorded(
+          lastFile.short_name,
+          (lastFile.type_byte & 0x04) === 0,
+          "filesystem",
+        ),
       );
   }
   // A stored literal target, never expanded: `%VAR%` text stays as written.
@@ -408,7 +511,8 @@ const targetPaths = (report: {
     const stored = unicode
       ? block.decoded.target_unicode
       : block.decoded.target_ansi;
-    if (stored.length > 0) values.push(recorded(stored, !unicode));
+    if (stored.length > 0)
+      values.push(recorded(stored, !unicode, "filesystem"));
   }
   return values;
 };
@@ -443,7 +547,10 @@ const observationsOf = (
     {
       kind: "target_extension",
       evidence_kind: "derived",
-      extension: extensionOf(targets[0]?.path ?? null),
+      extension:
+        targets[0] === undefined
+          ? null
+          : extensionOf(targets[0].path, targets[0].source),
     },
     {
       kind: "show_command_minimized",
