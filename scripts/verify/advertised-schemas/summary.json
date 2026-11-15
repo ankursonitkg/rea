@@ -488,7 +488,7 @@
     },
     "gdb_session_status": {
       "input compact": "d5defc56611ce19d",
-      "output compact": "c29682a2312eb267"
+      "output compact": "26e028e59794bb1a"
     },
     "get_call_graph": {
       "input compact": "5d40cd3080063c1d",
@@ -1096,7 +1096,7 @@
     },
     "rizin_debug_session_status": {
       "input compact": "d5defc56611ce19d",
-      "output compact": "cdbade1a97bbb088"
+      "output compact": "134677186a0a55b7"
     },
     "search_android_classes": {
       "input compact": "db67ac2566308239",
