@@ -36,6 +36,7 @@ import { AnalysisError } from "../domain/analysisErrorBase.js";
 import { jsonValueByteLength } from "../domain/jsonValueByteLength.js";
 import type { JsonValue } from "../domain/jsonValue.js";
 import {
+  cutterDiscoveryLimitations,
   cutterSessionSchema,
   type CutterBridgeDiscovery,
   type CutterBridgeSession,
@@ -376,10 +377,9 @@ export class CutterBridgeClient {
     }
   }
 
-  async listSessions(
-    options: CutterDiscoveryOptions = {},
-  ): Promise<CutterBridgeDiscovery> {
-    const { signal } = options;
+  async listSessions({
+    signal,
+  }: CutterDiscoveryOptions = {}): Promise<CutterBridgeDiscovery> {
     assertBridgeActive(signal, "list_cutter_sessions");
     this.#requestLimit();
     const mismatches: number[] = [];
@@ -390,6 +390,7 @@ export class CutterBridgeClient {
         bridge_directory: this.#directory,
         discovery_status: loaded.error,
         bridge_directory_security: loaded.security,
+        limitations: cutterDiscoveryLimitations(loaded.error),
       };
     const descriptors = await mapDiscovery(
       loaded.descriptors,
@@ -480,12 +481,17 @@ export class CutterBridgeClient {
         "Cutter",
         "No status request was sent to the mismatched session.",
       );
+    const discoveryStatus =
+      sessions.length > 0 ? "sessions_found" : "no_live_bridge_found";
     return {
       sessions,
       bridge_directory: this.#directory,
-      discovery_status:
-        sessions.length > 0 ? "sessions_found" : "no_live_bridge_found",
+      discovery_status: discoveryStatus,
       bridge_directory_security: loaded.security,
+      limitations: cutterDiscoveryLimitations(discoveryStatus, {
+        unreadable: loaded.unreadable,
+        unanswered: descriptors.length - sessions.length,
+      }),
     };
   }
 
@@ -855,18 +861,28 @@ export class CutterBridgeClient {
     }
   }
 
-  async #loadDescriptors(signal: AbortSignal | undefined): Promise<{
-    readonly descriptors: readonly z.infer<typeof descriptorSchema>[];
-    readonly security:
-      | "private_verified"
-      | "not_private"
-      | "unverified_platform_acl"
-      | "not_checked";
-    readonly error?:
-      | "bridge_directory_unavailable"
-      | "bridge_directory_insecure"
-      | "bridge_directory_capacity_exceeded";
-  }> {
+  async #loadDescriptors(signal: AbortSignal | undefined): Promise<
+    {
+      readonly descriptors: readonly z.infer<typeof descriptorSchema>[];
+      readonly security:
+        | "private_verified"
+        | "not_private"
+        | "unverified_platform_acl"
+        | "not_checked";
+    } & (
+      | {
+          readonly error?: undefined;
+          /** Filename-matching candidates that could not be read as a descriptor. */
+          readonly unreadable: number;
+        }
+      | {
+          readonly error:
+            | "bridge_directory_unavailable"
+            | "bridge_directory_insecure"
+            | "bridge_directory_capacity_exceeded";
+        }
+    )
+  > {
     assertArtifactReadActive(signal);
     let directoryInfo;
     try {
@@ -874,7 +890,7 @@ export class CutterBridgeClient {
     } catch (cause) {
       const code = (cause as NodeJS.ErrnoException).code;
       if (code === "ENOENT")
-        return { descriptors: [], security: "not_checked" };
+        return { descriptors: [], security: "not_checked", unreadable: 0 };
       return {
         descriptors: [],
         security: "not_checked",
@@ -1015,12 +1031,13 @@ export class CutterBridgeClient {
       () => assertArtifactReadActive(signal),
     );
     assertArtifactReadActive(signal);
+    const descriptors = loaded.filter(
+      (value): value is z.infer<typeof descriptorSchema> => value !== undefined,
+    );
     return {
-      descriptors: loaded.filter(
-        (value): value is z.infer<typeof descriptorSchema> =>
-          value !== undefined,
-      ),
+      descriptors,
       security,
+      unreadable: entries.length - descriptors.length,
     };
   }
 
