@@ -26,6 +26,7 @@ import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { createTestTempDirectory } from "../../tests/fixtures/temporaryDirectory.js";
 
 import { ZipArtifactReader } from "./ZipArtifactReader.js";
+import { ZIP_ZSTANDARD_WINDOW_MARKER } from "./ZipZstandardWindow.js";
 import { openRegularFile } from "../filesystem/RegularFile.js";
 import { OwnedFileHandle } from "../filesystem/OwnedFileHandle.js";
 import { hashReadable } from "./ArtifactHash.js";
@@ -296,6 +297,7 @@ describe("ZIP Zstandard decoder window", () => {
       reason: "limit",
       boundary: "memory",
       message: expect.stringContaining("fixed 128 MiB allowance"),
+      fixedAllowance: ZIP_ZSTANDARD_WINDOW_MARKER,
       cause: { code: "ZSTD_error_frameParameter_windowTooLarge" },
     });
     const translated = translateArtifactFailure("extract_artifact", failure);

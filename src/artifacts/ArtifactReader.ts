@@ -1,4 +1,7 @@
-import { fixedAllowanceRemediation } from "../domain/fixedAllowanceRemediation.js";
+import {
+  fixedAllowanceRemediation,
+  type FixedAllowance,
+} from "../domain/fixedAllowanceRemediation.js";
 import type { ArtifactReaderLimitFact } from "../domain/artifactReaderLimits.js";
 import type {
   ArtifactAdmissionLimit,
@@ -40,6 +43,8 @@ export interface ArtifactReaderFailureOptions extends ErrorOptions {
   /** Named admission whose recovery must not be inferred from other limit text. */
   readonly admission?: ArtifactAdmissionLimit;
   readonly readerLimit?: ArtifactReaderLimitFact;
+  /** Fixed allowance a limit names; more memory or a retry cannot lift it. */
+  readonly fixedAllowance?: FixedAllowance;
   /** For an `integrity` failure, the check that failed, when the reader names it. */
   readonly integrityCheck?: ArtifactIntegrityCheck;
 }
@@ -279,6 +284,8 @@ export class ArtifactReaderFailure extends Error {
   /** Named admission for a limit whose public recovery is owned by the producer. */
   readonly admission: ArtifactAdmissionLimit | undefined;
   readonly readerLimit: ArtifactReaderLimitFact | undefined;
+  /** Typed fixed allowance for a `limit` reason; never inferred from message text. */
+  readonly fixedAllowance: FixedAllowance | undefined;
   readonly integrityCheck: ArtifactIntegrityCheck | undefined;
 
   constructor(
@@ -309,6 +316,7 @@ export class ArtifactReaderFailure extends Error {
     this.boundary = options?.boundary;
     this.admission = options?.admission;
     this.readerLimit = options?.readerLimit;
+    this.fixedAllowance = options?.fixedAllowance;
     this.integrityCheck = options?.integrityCheck;
   }
 
@@ -323,6 +331,7 @@ export class ArtifactReaderFailure extends Error {
     | "boundary"
     | "admission"
     | "readerLimit"
+    | "fixedAllowance"
     | "integrityCheck"
   > {
     return {
@@ -337,6 +346,9 @@ export class ArtifactReaderFailure extends Error {
       ...(this.readerLimit === undefined
         ? {}
         : { readerLimit: this.readerLimit }),
+      ...(this.fixedAllowance === undefined
+        ? {}
+        : { fixedAllowance: this.fixedAllowance }),
       ...(this.integrityCheck === undefined
         ? {}
         : { integrityCheck: this.integrityCheck }),
