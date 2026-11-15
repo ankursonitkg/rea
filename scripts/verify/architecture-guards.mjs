@@ -439,6 +439,7 @@ const PARSER_FOLDERS = [
   "src/model/",
   "src/native/",
   "src/python/",
+  "src/rpm/",
   "src/rust/",
   "src/v8/",
   "src/wasm/",

@@ -72,6 +72,7 @@ export const UNIT_LAYERS = Object.freeze(
       "python",
       "reference",
       "rizin",
+      "rpm",
       "rust",
       "signals",
       "sqlite",

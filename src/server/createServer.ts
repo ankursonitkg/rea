@@ -43,6 +43,7 @@ import { registerGoTools } from "./registerGoTools.js";
 import { registerIl2cppTools } from "./registerIl2cppTools.js";
 import { registerRustTools } from "./registerRustTools.js";
 import { registerPythonPycTool } from "./registerPythonPycTool.js";
+import { registerRpmPackageTool } from "./registerRpmPackageTool.js";
 import { registerErlangTools } from "./registerErlangTools.js";
 import { registerV8CodeCacheTool } from "./registerV8CodeCacheTool.js";
 import { registerAnalysisViewTool } from "./registerAnalysisViewTool.js";
@@ -241,6 +242,7 @@ export const createServer = (
     electronFuses,
     releaseExposure,
     pythonPyc,
+    rpmPackage,
     webNetworkCapture,
     javascriptRecovery,
     artifactResources,
@@ -662,6 +664,13 @@ export const createServer = (
         recordEvidence,
         analysisAdmission,
         evidenceById,
+      );
+      registerRpmPackageTool(
+        server,
+        rpmPackage,
+        toolLogger,
+        recordEvidence,
+        analysisAdmission,
       );
       registerErlangTools(
         server,

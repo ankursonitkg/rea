@@ -308,6 +308,7 @@ const MIGRATED_COMMANDS = [
   "inspect-signature",
   "list-architectures",
   "demangle-swift",
+  "inspect-rpm-package",
 ];
 
 describe("CLI commands projected from tool contracts", () => {
